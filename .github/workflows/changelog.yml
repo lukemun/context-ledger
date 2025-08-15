@@ -50,3 +50,4 @@ jobs:
           version_increment: ${{ inputs.version_increment || 'auto' }}
           auto_commit: ${{ github.event_name != 'pull_request' }}
           create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true  # Allow PR to succeed even if API key is missing
