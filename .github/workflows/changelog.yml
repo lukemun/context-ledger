@@ -1,0 +1,52 @@
+name: Update Changelog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "docs/**"
+      - "**/CHANGELOG.md"
+      - "CHANGELOG.md"
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      version_increment:
+        description: "Version increment type"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - "auto"
+          - "patch"
+          - "minor"
+          - "major"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Changelog with Context Ledger
+        uses: lukemun/context-ledger@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          changelog_path: 'CHANGELOG.md'
+          target_name: 'context-ledger'
+          version_increment: ${{ inputs.version_increment || 'auto' }}
+          auto_commit: ${{ github.event_name != 'pull_request' }}
+          create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
