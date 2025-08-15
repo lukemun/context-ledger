@@ -93,11 +93,11 @@ runs:
           echo "Checking all files changed in PR..."
           # Fetch the base branch to ensure we have it
           git fetch origin ${{ github.event.pull_request.base.ref }} --depth=50
-          
+
           # Get the merge base (common ancestor)
           MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
           echo "Merge base: $MERGE_BASE"
-          
+
           # Get files changed since the merge base
           CHANGED_FILES=$(git diff --name-only $MERGE_BASE...HEAD | sort)
         else
@@ -207,7 +207,20 @@ runs:
 
         # Get current branch and recent tags
         CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        
+        # Try to get latest version from CHANGELOG.md first
+        LATEST_VERSION=""
+        if [ -f "CHANGELOG.md" ]; then
+          # Look for version pattern like [0.3.0] or ## [0.3.0]
+          LATEST_VERSION=$(grep -E '^\#\# \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | head -1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || true)
+        fi
+        
+        # If no version in changelog, try git tags
+        if [ -z "$LATEST_VERSION" ]; then
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        else
+          LATEST_TAG="v$LATEST_VERSION"
+        fi
 
         echo "current_branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
         echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
