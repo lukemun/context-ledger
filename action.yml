@@ -593,9 +593,11 @@ runs:
           echo "has_changes=${{ steps.check-status.outputs.has_changes || 'false' }}" >> $GITHUB_OUTPUT
           # Handle multiline content properly
           if [ -f "new_content.txt" ]; then
-            echo "changelog_content<<EOF" >> $GITHUB_OUTPUT
-            cat new_content.txt >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            {
+              echo "changelog_content<<CHANGELOG_EOF_MARKER"
+              cat new_content.txt
+              echo "CHANGELOG_EOF_MARKER"
+            } >> $GITHUB_OUTPUT
           else
             echo "changelog_content=" >> $GITHUB_OUTPUT
           fi
