@@ -55,6 +55,8 @@ jobs:
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+<!-- CONTEXT_LEDGER_MARKER -->
 ```
 
 - **Open a PR**: The action analyzes your changes and suggests entries for `CHANGELOG.md`.
@@ -394,12 +396,12 @@ jobs:
 
 ### Changelog Generation
 
-The action uses a clean, marker-free approach:
+The action uses a simple marker-based approach:
 
-- Reads your existing changelog content
-- Generates new entries based on PR changes
-- Appends the new content to the end of the file
-- No HTML comments or markers needed - just clean markdown
+- Looks for the `<!-- CONTEXT_LEDGER_MARKER -->` marker at the end of your changelog
+- Inserts new entries just before this marker
+- The marker always stays at the bottom of the file
+- This ensures clean insertion points and prevents overwriting content
 
 ### Commit Analysis
 

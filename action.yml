@@ -287,15 +287,24 @@ runs:
 
             // Create placeholder content if no existing content found
             if (!existingContent) {
-              existingContent = '# Changelog\n\nAll notable changes to this project will be documented in this file.\n';
+              existingContent = '# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n<!-- CONTEXT_LEDGER_MARKER -->\n';
+            }
+
+            // Ensure Context Ledger marker exists
+            if (!existingContent.includes('<!-- CONTEXT_LEDGER_MARKER -->')) {
+              existingContent = existingContent.trimEnd() + '\n\n<!-- CONTEXT_LEDGER_MARKER -->\n';
+              console.log('📝 Added Context Ledger marker');
             }
 
             // If file exists but not in PR diff, add a small change to trigger PR inclusion
             if (fileExistsOnTarget) {
-              // Add a comment with timestamp to ensure it shows in diff
+              // Add a timestamp comment before the marker to ensure it shows in diff
               const timestamp = new Date().toISOString();
-              existingContent = existingContent.trimEnd() + '\n\n<!-- Changelog prepared for updates at ' + timestamp + ' -->\n';
-              console.log('📝 Adding timestamp comment to trigger PR diff inclusion');
+              existingContent = existingContent.replace(
+                '<!-- CONTEXT_LEDGER_MARKER -->',
+                `<!-- Updated: ${timestamp} -->\n<!-- CONTEXT_LEDGER_MARKER -->`
+              );
+              console.log('📝 Adding timestamp to trigger PR diff inclusion');
             }
 
             // Prepare API parameters
@@ -586,7 +595,7 @@ runs:
                 let currentPosition = 0;
                 let lastContextLine = null;
 
-                // Find the last added or context line in the patch
+                // Find the AI_CONTENT marker or the last added/context line
                 for (let i = 0; i < patchLines.length; i++) {
                   const line = patchLines[i];
                   if (line.startsWith('@@')) {
@@ -597,9 +606,17 @@ runs:
                     }
                   } else if (line.startsWith('+')) {
                     currentPosition++;
-                    bestPosition = currentPosition; // Prefer added lines
+                    if (line.includes('CONTEXT_LEDGER_MARKER')) {
+                      bestPosition = currentPosition;
+                      break; // Found our marker, stop searching
+                    }
+                    bestPosition = currentPosition; // Keep track of added lines
                   } else if (line.startsWith(' ')) {
                     currentPosition++;
+                    if (line.includes('CONTEXT_LEDGER_MARKER')) {
+                      bestPosition = currentPosition;
+                      break; // Found our marker, stop searching
+                    }
                     lastContextLine = currentPosition; // Track context lines as fallback
                   }
                 }
