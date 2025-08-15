@@ -591,7 +591,8 @@ runs:
           echo "status=$STATUS" >> $GITHUB_OUTPUT
           echo "changelog_updated=${{ steps.check-status.outputs.changelog_updated || 'false' }}" >> $GITHUB_OUTPUT
           echo "has_changes=${{ steps.check-status.outputs.has_changes || 'false' }}" >> $GITHUB_OUTPUT
-          echo "changelog_content=${{ steps.check-status.outputs.changelog_content || '' }}" >> $GITHUB_OUTPUT
+          # Skip changelog_content output due to multiline issues
+          echo "changelog_content=" >> $GITHUB_OUTPUT
           echo "version_generated=${{ steps.check-status.outputs.version_generated || '' }}" >> $GITHUB_OUTPUT
         fi
 
