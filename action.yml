@@ -579,15 +579,23 @@ runs:
       shell: bash
       run: |
         # Set outputs based on what happened
-        if [ "${{ steps.check-suggestions.outputs.should_skip }}" == "true" ]; then
+        SHOULD_SKIP="${{ steps.check-suggestions.outputs.should_skip }}"
+        if [ "$SHOULD_SKIP" == "true" ]; then
           echo "status=SKIPPED" >> $GITHUB_OUTPUT
           echo "changelog_updated=false" >> $GITHUB_OUTPUT
           echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "changelog_content=" >> $GITHUB_OUTPUT
+          echo "version_generated=" >> $GITHUB_OUTPUT
         else
           STATUS="${{ steps.check-status.outputs.status }}"
+          if [ -z "$STATUS" ]; then
+            STATUS="ERROR"
+          fi
           echo "status=$STATUS" >> $GITHUB_OUTPUT
-          echo "changelog_updated=${{ steps.check-status.outputs.changelog_updated }}" >> $GITHUB_OUTPUT
-          echo "has_changes=${{ steps.check-status.outputs.has_changes }}" >> $GITHUB_OUTPUT
+          echo "changelog_updated=${{ steps.check-status.outputs.changelog_updated || 'false' }}" >> $GITHUB_OUTPUT
+          echo "has_changes=${{ steps.check-status.outputs.has_changes || 'false' }}" >> $GITHUB_OUTPUT
+          echo "changelog_content=${{ steps.check-status.outputs.changelog_content || '' }}" >> $GITHUB_OUTPUT
+          echo "version_generated=${{ steps.check-status.outputs.version_generated || '' }}" >> $GITHUB_OUTPUT
         fi
 
     - name: Cleanup
