@@ -430,6 +430,32 @@ npm test
 act pull_request -s ANTHROPIC_API_KEY=your_test_key
 ```
 
+## 🧪 Testing & Development
+
+### Testing Strategy
+
+Context Ledger uses a dual-workflow testing approach:
+
+1. **Production Testing** (`changelog.yml`): Uses the published version (`@v1`)
+2. **PR Testing** (`changelog-test.yml`): Tests PR changes using local code (`./`)
+3. **Integration Tests** (`integration-test.yml`): Matrix tests for edge cases
+
+### Release Process
+
+When ready to release a new version:
+
+```bash
+# 1. Ensure CHANGELOG.md has the new version
+# 2. Merge your PR to main
+# 3. Run the release script
+./scripts/release.sh
+```
+
+This will:
+- Create a new version tag (e.g., `v1.0.19`)
+- Update the floating major tag (e.g., `v1`)
+- Push both tags to GitHub
+
 ## 🛡️ Security
 
 - **API Key Security**: Store your Anthropic API key in GitHub Secrets, never in code
