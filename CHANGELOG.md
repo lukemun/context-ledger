@@ -36,5 +36,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Supports conventional commit message parsing
 - Includes comprehensive error handling and logging
 - Provides detailed outputs for integration with other workflows
-
-<!-- AI_APPEND_HERE -->

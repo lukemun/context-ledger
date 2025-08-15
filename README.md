@@ -52,9 +52,9 @@ jobs:
 ```markdown
 # Changelog
 
-## [Unreleased]
+All notable changes to this project will be documented in this file.
 
-<!-- AI_APPEND_HERE -->
+## [Unreleased]
 ```
 
 - **Open a PR**: The action analyzes your changes and suggests entries for `CHANGELOG.md`.
@@ -209,8 +209,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- Context Ledger will add new entries below this line -->
-<!-- AI_APPEND_HERE -->
+### Added
+
+- Initial features and functionality
 ```
 
 #### Step 3: Get Anthropic API Key
@@ -364,3 +365,155 @@ jobs:
           version_increment: ${{ github.event.inputs.version_increment || 'auto' }}
           auto_commit: true
 ```
+
+### Custom Configuration
+
+```yaml
+- name: Generate Changelog with Custom Settings
+  uses: lukemun/context-ledger@v1
+  with:
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    changelog_path: "docs/CHANGES.md"
+    target_name: "api-service"
+    commit_range: "20"
+    version_increment: "minor"
+    base_branch: "develop"
+    skip_if_no_changes: false
+    create_pr_suggestions: true
+```
+
+## 🧠 How It Works
+
+1. **Trigger Detection**: Runs on PR events, releases, or manual dispatch
+2. **Loop Prevention**: Checks for suggestion commits and changelog-only changes
+3. **Change Analysis**: Extracts PR commits, changed files, and git diffs
+4. **AI Processing**: Claude AI analyzes changes and generates categorized changelog entries
+5. **Version Management**: Automatically determines semantic version increments
+6. **Changelog Updates**: Simply appends new entries to the end of your changelog file
+7. **GitHub Integration**: Creates suggestions for one-click application in PRs
+
+### Changelog Generation
+
+The action uses a clean, marker-free approach:
+
+- Reads your existing changelog content
+- Generates new entries based on PR changes
+- Appends the new content to the end of the file
+- No HTML comments or markers needed - just clean markdown
+
+### Commit Analysis
+
+The action intelligently categorizes commits based on conventional commit patterns:
+
+- **feat:** → Added section, minor version increment
+- **fix:** → Fixed section, patch version increment
+- **docs:** → Changed section, patch version increment
+- **BREAKING:** → Major version increment
+- **chore/style/refactor/test:** → Technical Details section, patch increment
+
+### Version Strategy
+
+| Commit Types            | Version Increment     |
+| ----------------------- | --------------------- |
+| Breaking changes        | Major (1.0.0 → 2.0.0) |
+| New features (feat:)    | Minor (1.0.0 → 1.1.0) |
+| Bug fixes, docs, chores | Patch (1.0.0 → 1.0.1) |
+
+## 🔧 Development
+
+### Project Structure
+
+```
+context-ledger/
+├── action.yml              # Action definition
+├── lib/
+│   └── generate-changelog.js  # Core logic
+├── package.json            # Dependencies
+├── README.md              # Documentation
+├── LICENSE                # MIT License
+└── .github/
+    └── workflows/
+        └── test.yml       # CI/CD pipeline
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and test thoroughly
+4. Commit using conventional commits: `git commit -m 'feat: add amazing feature'`
+5. Push to the branch: `git push origin feature/amazing-feature`
+6. Open a Pull Request
+
+### Testing
+
+```bash
+# Install dependencies
+npm install
+
+# Run tests (when implemented)
+npm test
+
+# Test locally with act
+act pull_request -s ANTHROPIC_API_KEY=your_test_key
+```
+
+## 🧪 Testing & Development
+
+### Dual Workflow Approach
+
+Context Ledger provides two workflows for maximum flexibility:
+
+1. **Production Workflow** (`changelog.yml`) - Uses the published version (`@v1`)
+
+   - Stable, tested version
+   - What your users will experience
+   - Runs automatically on PRs and releases
+
+2. **Local Workflow** (`changelog-local.yml`) - Uses the PR's code (`./`)
+   - Test changes before merging
+   - Verify fixes work as expected
+   - Same functionality, different source
+
+### Release Process
+
+When ready to release a new version:
+
+```bash
+# 1. Ensure CHANGELOG.md has the new version
+# 2. Merge your PR to main
+# 3. Run the release script
+./scripts/release.sh
+```
+
+This will:
+
+- Create a new version tag (e.g., `v1.0.19`)
+- Update the floating major tag (e.g., `v1`)
+- Push both tags to GitHub
+
+## 🛡️ Security
+
+- **API Key Security**: Store your Anthropic API key in GitHub Secrets, never in code
+- **Permissions**: Use minimal required permissions (`contents: write`, `pull-requests: write`)
+- **Token Scope**: Action uses the provided GitHub token with repository scope only
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Support
+
+- 📖 [Documentation](https://github.com/lukemun/context-ledger)
+- 🐛 [Report Issues](https://github.com/lukemun/context-ledger/issues)
+- 💬 [Discussions](https://github.com/lukemun/context-ledger/discussions)
+
+## 🙏 Acknowledgments
+
+- [Anthropic](https://anthropic.com) for the powerful Claude AI API
+- [GitHub Actions](https://github.com/features/actions) for the automation platform
+- The open source community for inspiration and feedback
+
+---
+
+**Made with ❤️ by [Luke Munro](https://github.com/lukemun)**
