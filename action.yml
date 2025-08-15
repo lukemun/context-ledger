@@ -292,9 +292,10 @@ runs:
 
             // If file exists but not in PR diff, add a small change to trigger PR inclusion
             if (fileExistsOnTarget) {
-              // Add a newline to trigger the diff
-              existingContent = existingContent.trimEnd() + '\n\n';
-              console.log('📝 Adding whitespace to trigger PR diff inclusion');
+              // Add a comment with timestamp to ensure it shows in diff
+              const timestamp = new Date().toISOString();
+              existingContent = existingContent.trimEnd() + '\n\n<!-- Changelog prepared for updates at ' + timestamp + ' -->\n';
+              console.log('📝 Adding timestamp comment to trigger PR diff inclusion');
             }
 
             // Prepare API parameters
@@ -579,12 +580,13 @@ runs:
                   throw new Error('No patch available for modified file');
                 }
 
-                // Parse patch to find the last added line in the diff
+                // Parse patch to find a suitable position for the suggestion
                 const patchLines = patch.split('\n');
                 let bestPosition = null;
                 let currentPosition = 0;
+                let lastContextLine = null;
 
-                // Find the last added line in the patch
+                // Find the last added or context line in the patch
                 for (let i = 0; i < patchLines.length; i++) {
                   const line = patchLines[i];
                   if (line.startsWith('@@')) {
@@ -595,14 +597,29 @@ runs:
                     }
                   } else if (line.startsWith('+')) {
                     currentPosition++;
-                    bestPosition = currentPosition; // Keep updating to get the last added line
+                    bestPosition = currentPosition; // Prefer added lines
                   } else if (line.startsWith(' ')) {
                     currentPosition++;
+                    lastContextLine = currentPosition; // Track context lines as fallback
                   }
                 }
 
+                // Use the best position found, or fall back to last context line
+                if (!bestPosition && lastContextLine) {
+                  bestPosition = lastContextLine;
+                }
+
                 if (!bestPosition) {
-                  throw new Error('Could not find suitable position in diff');
+                  core.warning('Could not find ideal position in diff, attempting to create comment without line suggestion');
+                  // Instead of throwing, create a general PR comment
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    body: `🤖 **AI Changelog Ready!**\n\nAdd this to your \`${targetPath}\`:\n\n\`\`\`markdown\n${newContent}\n\`\`\`\n\n*Note: Could not create an inline suggestion due to diff limitations. Please copy and paste the above content manually.*`
+                  });
+                  core.info('✅ Posted changelog as PR comment (could not create inline suggestion)');
+                  return;
                 }
 
                 // Create suggestion targeting the found position
