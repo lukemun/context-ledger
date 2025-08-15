@@ -1,0 +1,597 @@
+name: "Context Ledger"
+description: "AI-powered changelog generator that maintains a source of truth for LLM context across your codebase"
+author: "Luke Munro"
+
+branding:
+  icon: "file-text"
+  color: "blue"
+
+inputs:
+  anthropic_api_key:
+    description: "Anthropic API key for Claude AI"
+    required: true
+  changelog_path:
+    description: "Path to the changelog file relative to repository root"
+    required: false
+    default: "CHANGELOG.md"
+  target_name:
+    description: "Target name for the changelog (used in commit messages and logs)"
+    required: false
+    default: "project"
+  commit_range:
+    description: "Number of recent commits to analyze for manual triggers"
+    required: false
+    default: "10"
+  version_increment:
+    description: "Version increment type (auto, patch, minor, major)"
+    required: false
+    default: "auto"
+  github_token:
+    description: "GitHub token for API operations"
+    required: false
+    default: ${{ github.token }}
+  base_branch:
+    description: "Base branch to compare against (defaults to repository default branch)"
+    required: false
+    default: ""
+  skip_if_no_changes:
+    description: "Skip changelog generation if no relevant changes detected"
+    required: false
+    default: "true"
+  create_pr_suggestions:
+    description: "Create GitHub PR suggestions for one-click application"
+    required: false
+    default: "true"
+  auto_commit:
+    description: "Automatically commit changes (only for non-PR events)"
+    required: false
+    default: "false"
+
+outputs:
+  changelog_updated:
+    description: "Whether the changelog was updated (true/false)"
+  changelog_content:
+    description: "The new changelog content that was generated"
+  status:
+    description: "Status of the operation (UPDATED, NO_UPDATE_NEEDED, ERROR, SKIPPED)"
+  version_generated:
+    description: "The version number that was generated"
+  has_changes:
+    description: "Whether there are actual changes in the changelog file"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: latest
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+        cache: "pnpm"
+        cache-dependency-path: ${{ github.action_path }}/package.json
+
+    - name: Install action dependencies
+      shell: bash
+      run: |
+        cd "${{ github.action_path }}"
+        pnpm install --frozen-lockfile
+
+    - name: Check for suggestion commits and loop prevention
+      id: check-suggestions
+      shell: bash
+      run: |
+        # Check if the most recent commit is from applying suggestions or only modifies changelog
+        LATEST_COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+        echo "Latest commit message: $LATEST_COMMIT_MSG"
+
+        # For PRs, check all files changed in the PR, not just the latest commit
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          echo "Checking all files changed in PR..."
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD | sort)
+        else
+          # For non-PR events, check the latest commit
+          CHANGED_FILES=$(git log -1 --name-only --pretty=format: | grep -v '^$' | sort)
+        fi
+        echo "Files changed:"
+        echo "$CHANGED_FILES"
+
+        # Get files changed in just the latest commit
+        LATEST_COMMIT_FILES=$(git log -1 --name-only --pretty=format: | grep -v '^$' | sort)
+        echo "Files changed in latest commit only:"
+        echo "$LATEST_COMMIT_FILES"
+
+        # Check if this is a suggestion application
+        if [[ "$LATEST_COMMIT_MSG" == *"Apply suggestions from code review"* ]]; then
+          echo "🔄 Detected suggestion application - skipping to prevent loops"
+          echo "should_skip=true" >> $GITHUB_OUTPUT
+          echo "skip_reason=suggestion_application" >> $GITHUB_OUTPUT
+        # Check if latest commit only modified changelog files
+        elif ! echo "$LATEST_COMMIT_FILES" | grep -v -E '(CHANGELOG\.md|.*CHANGELOG\.md)$' | grep -q '.'; then
+          echo "🔄 Latest commit only modified changelog files - skipping to prevent duplicate entries"
+          echo "should_skip=true" >> $GITHUB_OUTPUT
+          echo "skip_reason=changelog_only_commit" >> $GITHUB_OUTPUT
+        # Check if only changelog files were modified in the entire PR
+        elif echo "$CHANGED_FILES" | grep -v -E '(CHANGELOG\.md|.*CHANGELOG\.md)$' | grep -q '.'; then
+          echo "Non-changelog files were modified - proceeding with changelog automation"
+          echo "should_skip=false" >> $GITHUB_OUTPUT
+        else
+          echo "🔄 Only changelog files were modified in entire PR - skipping"
+          echo "should_skip=true" >> $GITHUB_OUTPUT
+          echo "skip_reason=changelog_only_pr" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Skip notification
+      if: steps.check-suggestions.outputs.should_skip == 'true'
+      shell: bash
+      run: |
+        echo "⏭️ Skipping changelog automation"
+        REASON="${{ steps.check-suggestions.outputs.skip_reason }}"
+        case "$REASON" in
+          "suggestion_application")
+            echo "Reason: Detected suggestion application commit"
+            ;;
+          "changelog_only_commit")
+            echo "Reason: Latest commit only modified changelog files"
+            ;;
+          "changelog_only_pr")
+            echo "Reason: Only changelog files were modified in entire PR"
+            ;;
+          *)
+            echo "Reason: Loop prevention triggered"
+            ;;
+        esac
+        echo "This prevents infinite loops and duplicate changelog entries"
+        echo "status=SKIPPED" >> $GITHUB_OUTPUT
+
+    - name: Analyze recent changes
+      if: steps.check-suggestions.outputs.should_skip != 'true'
+      id: analyze-changes
+      shell: bash
+      run: |
+        set -euxo pipefail
+
+        # Determine base branch
+        BASE_BRANCH="${{ inputs.base_branch }}"
+        if [ -z "$BASE_BRANCH" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          else
+            BASE_BRANCH="main"
+          fi
+        fi
+        echo "Using base branch: $BASE_BRANCH"
+
+        # Get commits that are part of this PR or recent commits
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          # For PRs, only analyze commits between base and head
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          echo "Analyzing PR commits between base ($BASE_SHA) and head ($HEAD_SHA)..."
+
+          # Get commits that are in this PR
+          git log --pretty=format:"%h|%s|%an|%ad" --date=short ${BASE_SHA}..${HEAD_SHA} > recent_commits.txt
+          COMMIT_COUNT=$(git rev-list --count ${BASE_SHA}..${HEAD_SHA})
+
+          # Get changed files for PR commits
+          git log --pretty=format:"%h" --name-only ${BASE_SHA}..${HEAD_SHA} > changed_files.txt
+        else
+          # For non-PR events, use the configured count
+          COMMIT_COUNT="${{ inputs.commit_range }}"
+          echo "Analyzing last $COMMIT_COUNT commits..."
+          git log --pretty=format:"%h|%s|%an|%ad" --date=short -n $COMMIT_COUNT > recent_commits.txt
+          git log --pretty=format:"%h" --name-only -n $COMMIT_COUNT > changed_files.txt
+        fi
+
+        # Get current branch and recent tags
+        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+
+        echo "current_branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
+        echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+        echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+        echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+
+    - name: Ensure changelog is in PR diff
+      if: github.event_name == 'pull_request' && steps.check-suggestions.outputs.should_skip != 'true'
+      uses: actions/github-script@v7
+      env:
+        CHANGELOG_PATH: ${{ inputs.changelog_path }}
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const targetPath = process.env.CHANGELOG_PATH;
+
+          // Check if changelog file exists in PR
+          const { data: files } = await github.rest.pulls.listFiles({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+
+          const changelogFile = files.find(f => f.filename === targetPath);
+
+          if (!changelogFile) {
+            console.log('Changelog not in PR diff, checking if file exists on branches...');
+
+            // First, check if file exists on target branch (PR branch)
+            let existingContent = '';
+            let sha = null;
+            let fileExistsOnTarget = false;
+
+            try {
+              const { data: fileData } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: targetPath,
+                ref: context.payload.pull_request.head.ref
+              });
+              existingContent = Buffer.from(fileData.content, 'base64').toString('utf8');
+              sha = fileData.sha;
+              fileExistsOnTarget = true;
+              console.log('✅ File exists on PR branch, will update with SHA');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+
+              // File doesn't exist on PR branch, check base branch for content
+              try {
+                const { data: baseFileData } = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: targetPath,
+                  ref: context.payload.pull_request.base.ref
+                });
+                existingContent = Buffer.from(baseFileData.content, 'base64').toString('utf8');
+                console.log('✅ File exists on base branch, will create new file on PR branch');
+              } catch (baseError) {
+                if (baseError.status !== 404) throw baseError;
+                console.log('✅ File does not exist on either branch, will create new file');
+              }
+            }
+
+            // Create placeholder content if no existing content found
+            if (!existingContent) {
+              existingContent = '# Changelog\n\n## [Unreleased]\n- Placeholder for AI-generated changelog\n\n<!-- AI_APPEND_HERE -->\n';
+            }
+
+            // Ensure AI_APPEND_HERE marker is always present at the end
+            if (!existingContent.includes('<!-- AI_APPEND_HERE -->')) {
+              existingContent += '\n\n<!-- AI_APPEND_HERE -->';
+              console.log('📝 Added AI_APPEND_HERE marker');
+            }
+
+            // If file exists but not in PR diff, add timestamp to trigger PR inclusion
+            if (fileExistsOnTarget) {
+              const timestamp = new Date().toISOString();
+              existingContent += `\n<!-- Updated for AI processing at ${timestamp} -->\n`;
+              console.log('📝 Adding timestamp to trigger PR diff inclusion');
+            }
+
+            // Prepare API parameters
+            const apiParams = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: targetPath,
+              message: 'chore: prepare changelog for AI suggestions\n\n🤖 Automated by Claude AI\n[skip ci]',
+              content: Buffer.from(existingContent).toString('base64'),
+              branch: context.payload.pull_request.head.ref
+            };
+
+            // CRITICAL: Only include SHA if file exists on target branch
+            if (fileExistsOnTarget && sha) {
+              apiParams.sha = sha;
+              console.log('📝 Updating existing file with SHA:', sha.substring(0, 8));
+            } else {
+              console.log('📝 Creating new file (no SHA required)');
+            }
+
+            try {
+              await github.rest.repos.createOrUpdateFileContents(apiParams);
+              console.log('✅ Successfully called API to add/update changelog');
+            } catch (apiError) {
+              console.error('❌ API call failed:', apiError.message);
+              throw apiError;
+            }
+
+            // Wait for GitHub to process the change
+            console.log('⏳ Waiting 3 seconds for GitHub to process...');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Verify the file is now in PR diff
+            const { data: updatedFiles } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const verifyFile = updatedFiles.find(f => f.filename === targetPath);
+            if (!verifyFile) {
+              console.error('❌ File not found in PR after API call');
+              console.log('PR files:', updatedFiles.map(f => f.filename));
+              throw new Error(`Failed to add ${targetPath} to PR - file not found after API call`);
+            }
+
+            console.log(`✅ Verified ${targetPath} is now in PR diff`);
+          } else {
+            console.log('✅ Changelog already in PR diff');
+          }
+
+    - name: Generate changelog with Claude
+      if: steps.check-suggestions.outputs.should_skip != 'true'
+      id: generate-changelog
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        CHANGELOG_PATH: ${{ inputs.changelog_path }}
+        TARGET: ${{ inputs.target_name }}
+        LATEST_TAG: ${{ steps.analyze-changes.outputs.latest_tag }}
+        COMMIT_COUNT: ${{ steps.analyze-changes.outputs.commit_count }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        VERSION_INCREMENT: ${{ inputs.version_increment }}
+      run: |
+        cd "${{ github.action_path }}"
+        node lib/generate-changelog.js
+
+    - name: Check changelog status
+      if: steps.check-suggestions.outputs.should_skip != 'true'
+      id: check-status
+      shell: bash
+      run: |
+        set -euxo pipefail
+
+        if [ -f "changelog_status.txt" ]; then
+          STATUS=$(cat changelog_status.txt)
+        else
+          STATUS="ERROR"
+        fi
+
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "changelog_updated=$([[ $STATUS == "UPDATED" ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+
+        echo "=== DEBUG: Checking changelog changes ==="
+        echo "Changelog path: ${{ inputs.changelog_path }}"
+        ls -la "${{ inputs.changelog_path }}" || echo "File does not exist"
+
+        if [ "$STATUS" = "UPDATED" ]; then
+          echo "Changelog was updated by Claude"
+
+          # Read generated content for output
+          if [ -f "new_content.txt" ]; then
+            CHANGELOG_CONTENT=$(cat new_content.txt)
+            echo "changelog_content<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+          # For PRs, compare against the base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Fetching base branch for comparison..."
+            BASE_BRANCH="${{ steps.analyze-changes.outputs.base_branch }}"
+            git fetch origin "$BASE_BRANCH"
+
+            echo "Comparing with origin/$BASE_BRANCH..."
+            if git diff --quiet "origin/$BASE_BRANCH..HEAD" -- "${{ inputs.changelog_path }}"; then
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "DEBUG: No differences from base branch"
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "DEBUG: Changelog differs from base branch"
+              echo "Diff preview:"
+              git diff "origin/$BASE_BRANCH..HEAD" -- "${{ inputs.changelog_path }}" || true
+            fi
+          else
+            # For non-PR events, check local changes
+            echo "Non-PR event, checking local changes..."
+            if git diff --quiet "${{ inputs.changelog_path }}"; then
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "DEBUG: No local git diff detected"
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "DEBUG: Local git diff detected"
+            fi
+          fi
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "DEBUG: Status was not UPDATED, it was: $STATUS"
+          echo "changelog_content=" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Handle non-PR auto commit
+      if: |
+        steps.check-status.outputs.status == 'UPDATED' &&
+        github.event_name != 'pull_request' &&
+        inputs.auto_commit == 'true'
+      shell: bash
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action (Claude)"
+        git add "${{ inputs.changelog_path }}"
+        git commit -m "docs(${{ inputs.target_name }}): update changelog via Claude AI
+
+        - Analyzed last ${{ steps.analyze-changes.outputs.commit_count }} commits
+        - Generated by Claude AI assistant
+        [skip ci]"
+
+        git push
+
+    - name: Create GitHub PR suggestions
+      if: |
+        steps.check-status.outputs.status == 'UPDATED' &&
+        github.event_name == 'pull_request' &&
+        steps.check-status.outputs.has_changes == 'true' &&
+        inputs.create_pr_suggestions == 'true'
+      uses: actions/github-script@v7
+      env:
+        CHANGELOG_PATH: ${{ inputs.changelog_path }}
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const fs = require('fs');
+          const targetPath = process.env.CHANGELOG_PATH;
+
+          // Read the new content to suggest (not the full file)
+          let newContent = '';
+          try {
+            newContent = fs.readFileSync('new_content.txt', 'utf8');
+          } catch (error) {
+            core.setFailed(`Could not read new content file: ${error.message}`);
+            throw error;
+          }
+
+          // Read the current full changelog to find the last line
+          let currentChangelog = '';
+          try {
+            currentChangelog = fs.readFileSync(targetPath, 'utf8');
+          } catch (error) {
+            core.setFailed(`Could not read changelog file: ${error.message}`);
+            throw error;
+          }
+
+          // Check if changelog file exists in PR
+          const { data: files } = await github.rest.pulls.listFiles({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+
+          const changelogFile = files.find(f => f.filename === targetPath);
+
+          if (changelogFile) {
+            try {
+              // Check if this is a new file (entire file added)
+              if (changelogFile.status === 'added') {
+                core.info('Changelog file is newly added - creating file replacement suggestion');
+
+                // For new files, suggest inserting before the AI_APPEND_HERE marker
+                let fullNewChangelog;
+                if (currentChangelog.includes('<!-- AI_APPEND_HERE -->')) {
+                  fullNewChangelog = currentChangelog.replace(/<!-- AI_APPEND_HERE -->/, newContent);
+                } else {
+                  fullNewChangelog = currentChangelog + '\n\n' + newContent;
+                }
+
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  event: 'COMMENT',
+                  body: '🤖 **AI Changelog Ready!** Click "Apply suggestion" to replace with updated changelog ⬇️',
+                  comments: [{
+                    path: targetPath,
+                    line: 1,
+                    side: 'RIGHT',
+                    body: `\`\`\`suggestion\n${fullNewChangelog}\n\`\`\``
+                  }]
+                });
+
+                core.info('✅ Posted full changelog replacement suggestion');
+              } else {
+                // File was modified - try to find a good diff position
+                const patch = changelogFile.patch;
+                if (!patch) {
+                  throw new Error('No patch available for modified file');
+                }
+
+                // Parse patch to find lines we can target
+                const patchLines = patch.split('\n');
+                let bestPosition = null;
+                let currentPosition = 0;
+
+                // Look for the AI_APPEND_HERE marker in the patch
+                for (let i = 0; i < patchLines.length; i++) {
+                  const line = patchLines[i];
+                  if (line.startsWith('@@')) {
+                    // Reset position counter at diff header
+                    const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
+                    if (match) {
+                      currentPosition = parseInt(match[1]) - 1;
+                    }
+                  } else if (line.startsWith('+')) {
+                    currentPosition++;
+                    if (line.includes('AI_APPEND_HERE')) {
+                      bestPosition = currentPosition;
+                      break;
+                    }
+                  } else if (line.startsWith(' ')) {
+                    currentPosition++;
+                  }
+                }
+
+                // If no marker found in patch, find last added line
+                if (!bestPosition) {
+                  currentPosition = 0;
+                  for (let i = 0; i < patchLines.length; i++) {
+                    const line = patchLines[i];
+                    if (line.startsWith('@@')) {
+                      const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
+                      if (match) {
+                        currentPosition = parseInt(match[1]) - 1;
+                      }
+                    } else if (line.startsWith('+')) {
+                      currentPosition++;
+                      bestPosition = currentPosition; // Keep updating to get the last one
+                    } else if (line.startsWith(' ')) {
+                      currentPosition++;
+                    }
+                  }
+                }
+
+                if (!bestPosition) {
+                  throw new Error('Could not find suitable position in diff');
+                }
+
+                // Create suggestion targeting the found position
+                const suggestionContent = newContent;
+
+                await github.rest.pulls.createReview({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  event: 'COMMENT',
+                  body: '🤖 **AI Changelog Ready!** Click "Apply suggestion" to append new changes ⬇️',
+                  comments: [{
+                    path: targetPath,
+                    line: bestPosition,
+                    side: 'RIGHT',
+                    body: `\`\`\`suggestion\n${suggestionContent}\n\`\`\``
+                  }]
+                });
+
+                core.info('✅ Posted changelog append suggestion with diff position targeting');
+              }
+
+            } catch (reviewError) {
+              core.setFailed(`Failed to create review suggestion: ${reviewError.message}`);
+              throw reviewError;
+            }
+          } else {
+            core.setFailed('Changelog file not found in PR after ensure step - this should not happen');
+            throw new Error('Changelog file not found in PR after ensure step');
+          }
+
+    - name: Set final outputs
+      if: always()
+      shell: bash
+      run: |
+        # Set outputs based on what happened
+        if [ "${{ steps.check-suggestions.outputs.should_skip }}" == "true" ]; then
+          echo "status=SKIPPED" >> $GITHUB_OUTPUT
+          echo "changelog_updated=false" >> $GITHUB_OUTPUT
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        else
+          STATUS="${{ steps.check-status.outputs.status }}"
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "changelog_updated=${{ steps.check-status.outputs.changelog_updated }}" >> $GITHUB_OUTPUT
+          echo "has_changes=${{ steps.check-status.outputs.has_changes }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        rm -f recent_commits.txt changed_files.txt changelog_status.txt new_content.txt

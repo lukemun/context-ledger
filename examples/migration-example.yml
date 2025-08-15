@@ -1,0 +1,155 @@
+# Migration Example: Converting from inline workflow to the action
+#
+# BEFORE: Your existing .github/workflows/update-changelog.yml
+# AFTER: This simplified version using the action
+
+name: Update Changelog with Claude
+
+on:
+  # Same triggers as your original workflow
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "docs/**"
+      - "**/CHANGELOG.md"
+      - "CHANGELOG.md"
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      target_changelog:
+        description: "Target changelog to update"
+        required: false
+        default: "project-wide"
+        type: choice
+        options:
+          - "project-wide"
+          - "decipher"
+          - "gf-crawler"
+          - "nextjs"
+      commit_range:
+        description: "Number of recent commits to analyze (default: 10)"
+        required: false
+        default: "10"
+      version_increment:
+        description: "Version increment type"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - "auto"
+          - "patch"
+          - "minor"
+          - "major"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Single job instead of complex multi-step workflow
+  update-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Determine which changelog to update (same logic as before)
+      - name: Determine target changelog
+        id: determine-target
+        run: |
+          TARGET="${{ github.event.inputs.target_changelog || 'project-wide' }}"
+
+          case "$TARGET" in
+            "decipher")
+              CHANGELOG_PATH="decipher/documentation/CHANGELOG.md"
+              ;;
+            "gf-crawler")
+              CHANGELOG_PATH="gf-crawler/CHANGELOG.md"
+              ;;
+            "nextjs")
+              CHANGELOG_PATH="nextjs/CHANGELOG.md"
+              ;;
+            "project-wide")
+              CHANGELOG_PATH="CHANGELOG.md"
+              ;;
+            *)
+              CHANGELOG_PATH="CHANGELOG.md"
+              ;;
+          esac
+
+          echo "changelog_path=$CHANGELOG_PATH" >> $GITHUB_OUTPUT
+          echo "target=$TARGET" >> $GITHUB_OUTPUT
+
+      # This replaces ~500 lines of complex workflow logic!
+      - name: Generate Changelog with Claude
+        id: changelog
+        uses: lukemun/context-ledger@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          changelog_path: ${{ steps.determine-target.outputs.changelog_path }}
+          target_name: ${{ steps.determine-target.outputs.target }}
+          commit_range: ${{ github.event.inputs.commit_range || '10' }}
+          version_increment: ${{ github.event.inputs.version_increment || 'auto' }}
+          # For non-PR events, auto-commit the changes
+          auto_commit: ${{ github.event_name != 'pull_request' }}
+
+      # Optional: Create summary (replaces the complex summary logic)
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Changelog Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          STATUS="${{ steps.changelog.outputs.status }}"
+          TARGET="${{ steps.determine-target.outputs.target }}"
+          CHANGELOG_PATH="${{ steps.determine-target.outputs.changelog_path }}"
+
+          case "$STATUS" in
+            "UPDATED")
+              if [ "${{ steps.changelog.outputs.has_changes }}" = "true" ]; then
+                echo "✅ **Changelog updated successfully**" >> $GITHUB_STEP_SUMMARY
+                echo "- Target: \`$TARGET\`" >> $GITHUB_STEP_SUMMARY
+                echo "- File: \`$CHANGELOG_PATH\`" >> $GITHUB_STEP_SUMMARY
+                echo "- Version: \`${{ steps.changelog.outputs.version_generated }}\`" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "ℹ️ **No changes detected in changelog**" >> $GITHUB_STEP_SUMMARY
+              fi
+              ;;
+            "NO_UPDATE_NEEDED"|"SKIPPED")
+              echo "ℹ️ **No changelog update needed**" >> $GITHUB_STEP_SUMMARY
+              echo "- Claude determined recent changes don't warrant changelog entry" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "ERROR")
+              echo "❌ **Error updating changelog**" >> $GITHUB_STEP_SUMMARY
+              echo "- Check the workflow logs for details" >> $GITHUB_STEP_SUMMARY
+              ;;
+          esac
+
+# Benefits of this migration:
+#
+# 1. ✅ Reduced from ~850 lines to ~100 lines
+# 2. ✅ All complex logic moved to reusable action
+# 3. ✅ Same functionality with better error handling
+# 4. ✅ Easier to maintain and debug
+# 5. ✅ Can be used across multiple repositories
+# 6. ✅ Regular updates via Dependabot
+# 7. ✅ Better testing and validation
+# 8. ✅ Cleaner, more readable workflow
+#
+# Migration steps:
+# 1. Add ANTHROPIC_API_KEY to repository secrets
+# 2. Replace your existing workflow with this one
+# 3. Update the action reference to: lukemun/context-ledger@v1
+# 4. Test with a sample PR
+# 5. Customize inputs as needed for your use case

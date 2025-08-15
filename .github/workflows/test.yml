@@ -1,0 +1,132 @@
+name: Test Claude Changelog Action
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-action:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          cd .
+          npm install
+
+      - name: Test action (dry run without API key)
+        env:
+          ANTHROPIC_API_KEY: "test-key-placeholder"
+          CHANGELOG_PATH: "test-changelog.md"
+          TARGET: "test"
+          LATEST_TAG: "v1.0.0"
+          COMMIT_COUNT: "5"
+          GITHUB_EVENT_NAME: "push"
+          VERSION_INCREMENT: "patch"
+        run: |
+          # Create test data
+          echo "abc123|feat: add new feature|test-author|2025-01-20" > recent_commits.txt
+          echo "def456|fix: resolve bug|test-author|2025-01-20" >> recent_commits.txt
+          echo "src/app.js" > changed_files.txt
+          echo "src/utils.js" >> changed_files.txt
+
+          # Test script validation (will fail on API call but should validate structure)
+          node lib/generate-changelog.js || echo "Expected to fail without valid API key"
+
+          # Check that the script doesn't crash on file parsing
+          if [ ! -f changelog_status.txt ]; then
+            echo "Error: changelog_status.txt was not created"
+            exit 1
+          fi
+
+          echo "✅ Script structure validation passed"
+
+  lint-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm install
+          npm install js-yaml
+
+      - name: Validate action.yml
+        run: |
+          # Basic YAML validation
+          node -e "
+            const yaml = require('js-yaml');
+            const fs = require('fs');
+            try {
+              const doc = yaml.load(fs.readFileSync('action.yml', 'utf8'));
+              console.log('✅ action.yml is valid YAML');
+
+              // Check required fields
+              if (!doc.name) throw new Error('Missing name field');
+              if (!doc.description) throw new Error('Missing description field');
+              if (!doc.runs) throw new Error('Missing runs field');
+              if (!doc.inputs) throw new Error('Missing inputs field');
+              if (!doc.outputs) throw new Error('Missing outputs field');
+
+              console.log('✅ action.yml has required fields');
+            } catch (e) {
+              console.error('❌ action.yml validation failed:', e.message);
+              process.exit(1);
+            }
+          "
+
+      - name: Check Node.js syntax
+        run: |
+          node -c lib/generate-changelog.js
+          echo "✅ JavaScript syntax is valid"
+
+  integration-test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Test the action
+        uses: ./
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          changelog_path: "TEST_CHANGELOG.md"
+          target_name: "integration-test"
+          auto_commit: false
+        continue-on-error: true
+
+      - name: Check outputs
+        run: |
+          echo "Status: ${{ steps.test.outputs.status }}"
+          echo "Updated: ${{ steps.test.outputs.changelog_updated }}"
+          echo "Has changes: ${{ steps.test.outputs.has_changes }}"

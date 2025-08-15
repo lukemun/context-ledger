@@ -1,0 +1,34 @@
+{
+  "name": "context-ledger",
+  "version": "1.0.0",
+  "description": "GitHub Action to generate changelog entries using AI, maintaining a source of truth for LLM context",
+  "main": "lib/generate-changelog.js",
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "test": "echo 'Tests not implemented yet'"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "semver": "^7.6.3"
+  },
+  "keywords": [
+    "github-action",
+    "changelog",
+    "ai",
+    "claude",
+    "anthropic",
+    "llm",
+    "context",
+    "automation"
+  ],
+  "author": "Luke Munro",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lukemun/context-ledger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lukemun/context-ledger/issues"
+  },
+  "homepage": "https://github.com/lukemun/context-ledger#readme"
+}
