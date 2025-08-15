@@ -76,7 +76,7 @@ runs:
       shell: bash
       run: |
         cd "${{ github.action_path }}"
-        pnpm install --frozen-lockfile --ignore-scripts
+        pnpm install --no-frozen-lockfile --ignore-scripts
 
     - name: Check for suggestion commits and loop prevention
       id: check-suggestions
