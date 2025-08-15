@@ -287,19 +287,23 @@ runs:
 
             // Create placeholder content if no existing content found
             if (!existingContent) {
-              existingContent = '# Changelog\n\n## [Unreleased]\n- Placeholder for AI-generated changelog\n\n<!-- AI_APPEND_HERE -->\n';
+              existingContent = '# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n<!-- CONTEXT_LEDGER_MARKER -->\n';
             }
 
-            // Ensure AI_APPEND_HERE marker is always present at the end
-            if (!existingContent.includes('<!-- AI_APPEND_HERE -->')) {
-              existingContent += '\n\n<!-- AI_APPEND_HERE -->';
-              console.log('📝 Added AI_APPEND_HERE marker');
+            // Ensure Context Ledger marker exists
+            if (!existingContent.includes('<!-- CONTEXT_LEDGER_MARKER -->')) {
+              existingContent = existingContent.trimEnd() + '\n\n<!-- CONTEXT_LEDGER_MARKER -->\n';
+              console.log('📝 Added Context Ledger marker');
             }
 
-            // If file exists but not in PR diff, add timestamp to trigger PR inclusion
+            // If file exists but not in PR diff, add a small change to trigger PR inclusion
             if (fileExistsOnTarget) {
+              // Add a timestamp comment before the marker to ensure it shows in diff
               const timestamp = new Date().toISOString();
-              existingContent += `\n<!-- Updated for AI processing at ${timestamp} -->\n`;
+              existingContent = existingContent.replace(
+                '<!-- CONTEXT_LEDGER_MARKER -->',
+                `<!-- Updated: ${timestamp} -->\n<!-- CONTEXT_LEDGER_MARKER -->`
+              );
               console.log('📝 Adding timestamp to trigger PR diff inclusion');
             }
 
@@ -449,21 +453,24 @@ runs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
-          # For PRs, compare against the base branch
+          # For PRs, check if we should create suggestions
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "Fetching base branch for comparison..."
             BASE_BRANCH="${{ steps.analyze-changes.outputs.base_branch }}"
             git fetch origin "$BASE_BRANCH"
 
-            echo "Comparing with origin/$BASE_BRANCH..."
-            if git diff --quiet "origin/$BASE_BRANCH..HEAD" -- "${{ inputs.changelog_path }}"; then
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-              echo "DEBUG: No differences from base branch"
-            else
+            echo "Checking for non-changelog changes in PR..."
+            # Get all changed files excluding changelog
+            NON_CHANGELOG_CHANGES=$(git diff --name-only "origin/$BASE_BRANCH..HEAD" | grep -v -E "(CHANGELOG\.md|.*CHANGELOG\.md)$" || true)
+
+            if [ -n "$NON_CHANGELOG_CHANGES" ]; then
               echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "DEBUG: Changelog differs from base branch"
-              echo "Diff preview:"
-              git diff "origin/$BASE_BRANCH..HEAD" -- "${{ inputs.changelog_path }}" || true
+              echo "DEBUG: PR has non-changelog changes, suggestions should be created"
+              echo "Non-changelog files changed:"
+              echo "$NON_CHANGELOG_CHANGES"
+            else
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "DEBUG: PR only has changelog changes, skipping suggestions"
             fi
           else
             # For non-PR events, check local changes
@@ -501,6 +508,11 @@ runs:
         git push
 
     - name: Create GitHub PR suggestions
+      # Only create suggestions if:
+      # - Changelog was generated (status == 'UPDATED')
+      # - This is a PR event
+      # - PR has non-changelog changes (has_changes == 'true')
+      # - User wants suggestions (create_pr_suggestions == 'true')
       if: |
         steps.check-status.outputs.status == 'UPDATED' &&
         github.event_name == 'pull_request' &&
@@ -548,13 +560,12 @@ runs:
               if (changelogFile.status === 'added') {
                 core.info('Changelog file is newly added - creating file replacement suggestion');
 
-                // For new files, suggest inserting before the AI_APPEND_HERE marker
-                let fullNewChangelog;
-                if (currentChangelog.includes('<!-- AI_APPEND_HERE -->')) {
-                  fullNewChangelog = currentChangelog.replace(/<!-- AI_APPEND_HERE -->/, newContent);
-                } else {
-                  fullNewChangelog = currentChangelog + '\n\n' + newContent;
+                // For new files, append content to existing changelog
+                let fullNewChangelog = currentChangelog.trimEnd();
+                if (fullNewChangelog) {
+                  fullNewChangelog += '\n\n';
                 }
+                fullNewChangelog += newContent + '\n';
 
                 await github.rest.pulls.createReview({
                   owner: context.repo.owner,
@@ -578,12 +589,13 @@ runs:
                   throw new Error('No patch available for modified file');
                 }
 
-                // Parse patch to find lines we can target
+                // Parse patch to find a suitable position for the suggestion
                 const patchLines = patch.split('\n');
                 let bestPosition = null;
                 let currentPosition = 0;
+                let lastContextLine = null;
 
-                // Look for the AI_APPEND_HERE marker in the patch
+                // Find the AI_CONTENT marker or the last added/context line
                 for (let i = 0; i < patchLines.length; i++) {
                   const line = patchLines[i];
                   if (line.startsWith('@@')) {
@@ -594,36 +606,37 @@ runs:
                     }
                   } else if (line.startsWith('+')) {
                     currentPosition++;
-                    if (line.includes('AI_APPEND_HERE')) {
+                    if (line.includes('CONTEXT_LEDGER_MARKER')) {
                       bestPosition = currentPosition;
-                      break;
+                      break; // Found our marker, stop searching
                     }
+                    bestPosition = currentPosition; // Keep track of added lines
                   } else if (line.startsWith(' ')) {
                     currentPosition++;
-                  }
-                }
-
-                // If no marker found in patch, find last added line
-                if (!bestPosition) {
-                  currentPosition = 0;
-                  for (let i = 0; i < patchLines.length; i++) {
-                    const line = patchLines[i];
-                    if (line.startsWith('@@')) {
-                      const match = line.match(/@@ -\d+,?\d* \+(\d+),?\d* @@/);
-                      if (match) {
-                        currentPosition = parseInt(match[1]) - 1;
-                      }
-                    } else if (line.startsWith('+')) {
-                      currentPosition++;
-                      bestPosition = currentPosition; // Keep updating to get the last one
-                    } else if (line.startsWith(' ')) {
-                      currentPosition++;
+                    if (line.includes('CONTEXT_LEDGER_MARKER')) {
+                      bestPosition = currentPosition;
+                      break; // Found our marker, stop searching
                     }
+                    lastContextLine = currentPosition; // Track context lines as fallback
                   }
                 }
 
+                // Use the best position found, or fall back to last context line
+                if (!bestPosition && lastContextLine) {
+                  bestPosition = lastContextLine;
+                }
+
                 if (!bestPosition) {
-                  throw new Error('Could not find suitable position in diff');
+                  core.warning('Could not find ideal position in diff, attempting to create comment without line suggestion');
+                  // Instead of throwing, create a general PR comment
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    body: `🤖 **AI Changelog Ready!**\n\nAdd this to your \`${targetPath}\`:\n\n\`\`\`markdown\n${newContent}\n\`\`\`\n\n*Note: Could not create an inline suggestion due to diff limitations. Please copy and paste the above content manually.*`
+                  });
+                  core.info('✅ Posted changelog as PR comment (could not create inline suggestion)');
+                  return;
                 }
 
                 // Create suggestion targeting the found position

@@ -7,6 +7,60 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 
 > **Installation**: Use `lukemun/context-ledger@v1` in your workflows. For the latest features, use `@main`.
 
+## 🛠️ Quick Setup
+
+- **Add secret**: In GitHub → Settings → Secrets and variables → Actions → New repository secret
+
+  - Name: `ANTHROPIC_API_KEY`
+  - Value: your Anthropic API key
+
+- **Add workflow**: Create `.github/workflows/changelog.yml`
+
+```yaml
+name: Update Changelog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/CHANGELOG.md"
+      - "CHANGELOG.md"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        uses: lukemun/context-ledger@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: changelog_path, target_name, commit_range, version_increment, create_pr_suggestions, auto_commit
+```
+
+- **Create changelog**: Add `CHANGELOG.md` to your repo root
+
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+<!-- CONTEXT_LEDGER_MARKER -->
+```
+
+- **Open a PR**: The action analyzes your changes and suggests entries for `CHANGELOG.md`.
+
 ## ✨ Features
 
 - 🤖 **AI-Powered Analysis**: Uses Claude AI to understand commit patterns and generate meaningful changelog entries
@@ -27,7 +81,7 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 - **Faster onboarding for new engineers and contractors (founder benefit)**: Give an LLM the precise, up‑to‑date context to answer “how does this work?” based on real, recent changes. Reduce ramp‑up time without long knowledge dumps.
 - **Sales enablement with up‑to‑date product information**: Keep customer‑facing docs, release summaries, and collateral aligned with what actually shipped so sales can speak confidently and accurately.
 
-## 🚀 Quick Start
+## 🧩 In-Depth Setup
 
 ### Simple Setup (single project)
 
@@ -157,8 +211,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- Context Ledger will add new entries below this line -->
-<!-- AI_APPEND_HERE -->
+### Added
+
+- Initial features and functionality
 ```
 
 #### Step 3: Get Anthropic API Key
@@ -196,42 +251,6 @@ Create a new pull request and watch Context Ledger analyze your changes and sugg
 - **Permissions**: Make sure your repository allows Actions to write to PRs (enabled by default)
 - **Customize target options**: Update the `target_changelog` options in `workflow_dispatch` to match your project structure (e.g., service names in a monorepo)
 
-### Basic Usage (Alternative)
-
-```yaml
-name: Update Changelog
-
-on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "**/CHANGELOG.md"
-      - "CHANGELOG.md"
-
-jobs:
-  update-changelog:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate Changelog
-        uses: lukemun/context-ledger@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          changelog_path: "CHANGELOG.md"
-          target_name: "project"
-```
-
 ### Required Setup
 
 1. **Get an Anthropic API Key**:
@@ -241,6 +260,7 @@ jobs:
    - Add it to your repository secrets as `ANTHROPIC_API_KEY`
 
 2. **Configure Repository Permissions**:
+
    - Ensure your workflow has `contents: write` and `pull-requests: write` permissions
    - For private repositories, you may need to adjust branch protection rules
 
@@ -371,7 +391,17 @@ jobs:
 3. **Change Analysis**: Extracts PR commits, changed files, and git diffs
 4. **AI Processing**: Claude AI analyzes changes and generates categorized changelog entries
 5. **Version Management**: Automatically determines semantic version increments
-6. **GitHub Integration**: Creates suggestions for one-click application in PRs
+6. **Changelog Updates**: Simply appends new entries to the end of your changelog file
+7. **GitHub Integration**: Creates suggestions for one-click application in PRs
+
+### Changelog Generation
+
+The action uses a simple marker-based approach:
+
+- Looks for the `<!-- CONTEXT_LEDGER_MARKER -->` marker at the end of your changelog
+- Inserts new entries just before this marker
+- The marker always stays at the bottom of the file
+- This ensures clean insertion points and prevents overwriting content
 
 ### Commit Analysis
 
@@ -396,7 +426,7 @@ The action intelligently categorizes commits based on conventional commit patter
 ### Project Structure
 
 ```
-claude-changelog-action/
+context-ledger/
 ├── action.yml              # Action definition
 ├── lib/
 │   └── generate-changelog.js  # Core logic
@@ -437,6 +467,7 @@ act pull_request -s ANTHROPIC_API_KEY=your_test_key
 Context Ledger provides two workflows for maximum flexibility:
 
 1. **Production Workflow** (`changelog.yml`) - Uses the published version (`@v1`)
+
    - Stable, tested version
    - What your users will experience
    - Runs automatically on PRs and releases
@@ -458,6 +489,7 @@ When ready to release a new version:
 ```
 
 This will:
+
 - Create a new version tag (e.g., `v1.0.19`)
 - Update the floating major tag (e.g., `v1`)
 - Push both tags to GitHub

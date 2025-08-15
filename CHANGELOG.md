@@ -37,4 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Includes comprehensive error handling and logging
 - Provides detailed outputs for integration with other workflows
 
-<!-- AI_APPEND_HERE -->
+## [1.1.0] - August 2025
+
+Introduces improved changelog management with a dedicated marker system for automated insertions, along with streamlined documentation and configuration options for better usability.
+
+### Added
+- New CONTEXT_LEDGER_MARKER system for precise changelog entry insertion
+- Enhanced configuration options for changelog suggestion handling
+
+### Changed
+- Streamlined documentation structure with improved README clarity
+- Simplified action configuration with better defaults
+- Optimized changelog generation process
+
+### Fixed
+- Improved handling of changelog suggestions and marker removal
+- Enhanced action stability and reliability
+
+### Removed
+- Legacy migration files and outdated documentation
+- Deprecated example configurations
+
+### Technical Details
+- Refactored changelog generation logic for better maintainability
+- Improved marker-based insertion system for more reliable updates
