@@ -332,8 +332,7 @@ runs:
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         VERSION_INCREMENT: ${{ inputs.version_increment }}
       run: |
-        cd "${{ github.action_path }}"
-        node lib/generate-changelog.js
+        node "${{ github.action_path }}/lib/generate-changelog.js"
 
     - name: Check changelog status
       if: steps.check-suggestions.outputs.should_skip != 'true'
