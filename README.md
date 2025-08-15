@@ -17,6 +17,16 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 - 📊 **Multiple Triggers**: Works with pull requests, releases, and manual workflow dispatch
 - 🎯 **Flexible Configuration**: Supports custom changelog paths, target names, and versioning strategies
 
+## 📦 Common Use Cases
+
+- **Keep LLMs in sync with your codebase**: Maintain a canonical changelog that becomes the model's source of truth for context. Ideal for AI-assisted code review, agents, and RAG pipelines.
+- **Automated release notes**: Trigger on `release: published` to generate human‑readable notes for changelogs and GitHub Releases.
+- **Monorepo per-package changelogs**: Run in a matrix to append entries only to packages that changed.
+- **Compliance and audit trails**: Preserve an append‑only ledger of changes with PR‑linked provenance and one‑click suggestions.
+- **Docs-as-code workflows**: Ensure product and API docs stay aligned with actual shipped changes.
+- **Faster onboarding for new engineers and contractors (founder benefit)**: Give an LLM the precise, up‑to‑date context to answer “how does this work?” based on real, recent changes. Reduce ramp‑up time without long knowledge dumps.
+- **Sales enablement with up‑to‑date product information**: Keep customer‑facing docs, release summaries, and collateral aligned with what actually shipped so sales can speak confidently and accurately.
+
 ## 🚀 Quick Start
 
 ### Basic Usage
