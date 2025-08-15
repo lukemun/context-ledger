@@ -432,13 +432,19 @@ act pull_request -s ANTHROPIC_API_KEY=your_test_key
 
 ## 🧪 Testing & Development
 
-### Testing Strategy
+### Dual Workflow Approach
 
-Context Ledger uses a dual-workflow testing approach:
+Context Ledger provides two workflows for maximum flexibility:
 
-1. **Production Testing** (`changelog.yml`): Uses the published version (`@v1`)
-2. **PR Testing** (`changelog-test.yml`): Tests PR changes using local code (`./`)
-3. **Integration Tests** (`integration-test.yml`): Matrix tests for edge cases
+1. **Production Workflow** (`changelog.yml`) - Uses the published version (`@v1`)
+   - Stable, tested version
+   - What your users will experience
+   - Runs automatically on PRs and releases
+
+2. **Local Workflow** (`changelog-local.yml`) - Uses the PR's code (`./`)
+   - Test changes before merging
+   - Verify fixes work as expected
+   - Same functionality, different source
 
 ### Release Process
 

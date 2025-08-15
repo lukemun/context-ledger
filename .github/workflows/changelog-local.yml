@@ -1,4 +1,7 @@
-name: Update Changelog
+name: Update Changelog (Local Version)
+
+# This workflow uses the local version of Context Ledger from the PR
+# Useful for testing changes before they're published
 
 on:
   pull_request:
@@ -9,21 +12,7 @@ on:
       - "**/CHANGELOG.md"
       - "CHANGELOG.md"
 
-  release:
-    types: [published]
-
   workflow_dispatch:
-    inputs:
-      version_increment:
-        description: "Version increment type"
-        required: false
-        default: "auto"
-        type: choice
-        options:
-          - "auto"
-          - "patch"
-          - "minor"
-          - "major"
 
 permissions:
   contents: write
@@ -31,7 +20,7 @@ permissions:
   issues: write
 
 jobs:
-  update-changelog:
+  update-changelog-local:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,16 +30,16 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Changelog with Context Ledger
-        uses: lukemun/context-ledger@v1
+      - name: Update Changelog with Local Context Ledger
+        uses: ./  # Uses the local action code from this PR
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           changelog_path: "CHANGELOG.md"
           target_name: "context-ledger"
-          version_increment: ${{ inputs.version_increment || 'auto' }}
+          version_increment: "auto"
           auto_commit: ${{ github.event_name != 'pull_request' }}
           create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
-        continue-on-error: true  # Allow PR to succeed even if API key is missing
+        continue-on-error: true
 
       - name: Add workflow source comment
         if: github.event_name == 'pull_request'
@@ -66,7 +55,7 @@ jobs:
             });
             
             const hasComment = comments.data.some(c => 
-              c.body.includes('🏷️ Workflow: Production Version')
+              c.body.includes('🧪 Workflow: Local Version')
             );
             
             if (!hasComment) {
@@ -74,6 +63,6 @@ jobs:
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: '🏷️ **Workflow: Production Version** - This changelog was generated using `lukemun/context-ledger@v1`'
+                body: '🧪 **Workflow: Local Version** - This changelog was generated using the PR\'s local code (`./`)'
               });
             }
