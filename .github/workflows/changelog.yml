@@ -45,8 +45,8 @@ jobs:
         uses: lukemun/context-ledger@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          changelog_path: 'CHANGELOG.md'
-          target_name: 'context-ledger'
+          changelog_path: "CHANGELOG.md"
+          target_name: "context-ledger"
           version_increment: ${{ inputs.version_increment || 'auto' }}
           auto_commit: ${{ github.event_name != 'pull_request' }}
           create_pr_suggestions: ${{ github.event_name == 'pull_request' }}

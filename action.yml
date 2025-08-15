@@ -83,7 +83,7 @@ runs:
       shell: bash
       run: |
         set +e  # Don't exit on error for this section
-        
+
         # Check if the most recent commit is from applying suggestions or only modifies changelog
         LATEST_COMMIT_MSG=$(git log -1 --pretty=format:"%s")
         echo "Latest commit message: $LATEST_COMMIT_MSG"
