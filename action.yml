@@ -637,7 +637,7 @@ runs:
         # Set outputs based on what happened
         SHOULD_SKIP="${{ steps.check-suggestions.outputs.should_skip }}"
         API_KEY_MISSING="${{ steps.check-api-key.outputs.api_key_missing }}"
-        
+
         if [ "$SHOULD_SKIP" == "true" ]; then
           echo "status=SKIPPED" >> $GITHUB_OUTPUT
           echo "changelog_updated=false" >> $GITHUB_OUTPUT

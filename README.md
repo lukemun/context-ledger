@@ -29,9 +29,47 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 
 ## 🚀 Quick Start
 
-### Complete Setup Guide
+### Simple Setup (single project)
 
-Follow these steps to set up Context Ledger in your repository:
+Add this workflow to `.github/workflows/changelog.yml`:
+
+```yaml
+name: Update Changelog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/CHANGELOG.md"
+      - "CHANGELOG.md"
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        uses: lukemun/context-ledger@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          changelog_path: "CHANGELOG.md"
+          target_name: "project"
+```
+
+This is all most repos need. No installation required — the workflow simply references `lukemun/context-ledger@v1`.
+
+### Monorepo Setup (advanced)
+
+Follow these steps to set up Context Ledger for multi-project repositories:
 
 #### Step 1: Create the Workflow File
 
@@ -54,6 +92,18 @@ on:
 
   workflow_dispatch:
     inputs:
+      target_changelog:
+        description: "Target changelog to update"
+        required: false
+        default: "project-wide"
+        type: choice
+        options:
+          - "project-wide"
+          - "your-service-name" # Add your service names here
+      commit_range:
+        description: "Number of recent commits to analyze (default: 10)"
+        required: false
+        default: "10"
       version_increment:
         description: "Version increment type"
         required: false
@@ -86,7 +136,8 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           changelog_path: "CHANGELOG.md"
-          target_name: "your-project-name"
+          target_name: ${{ inputs.target_changelog || 'project-wide' }}
+          commit_range: ${{ inputs.commit_range || '10' }}
           version_increment: ${{ inputs.version_increment || 'auto' }}
           auto_commit: ${{ github.event_name != 'pull_request' }}
           create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
@@ -103,6 +154,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
 
 <!-- Context Ledger will add new entries below this line -->
 <!-- AI_APPEND_HERE -->
@@ -141,6 +194,7 @@ Create a new pull request and watch Context Ledger analyze your changes and sugg
 - **API key required**: Without `ANTHROPIC_API_KEY`, Context Ledger will post a helpful comment with setup instructions
 - **First run**: The action will run starting with your first PR after adding the workflow to main
 - **Permissions**: Make sure your repository allows Actions to write to PRs (enabled by default)
+- **Customize target options**: Update the `target_changelog` options in `workflow_dispatch` to match your project structure (e.g., service names in a monorepo)
 
 ### Basic Usage (Alternative)
 
