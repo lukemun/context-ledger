@@ -7,6 +7,16 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 
 > **Installation**: Use `lukemun/context-ledger@v1` in your workflows. For the latest features, use `@main`.
 
+## 📦 Common Use Cases
+
+- **Keep LLMs in sync with your codebase**: Maintain a canonical changelog that becomes the model's source of truth for context. Ideal for AI-assisted code review, agents, and RAG pipelines.
+- **Docs-as-code workflows**: Ensure product and API docs stay aligned with actual shipped changes.
+- **Faster onboarding for new engineers and contractors (founder benefit)**: Give an LLM the precise, up‑to‑date context to answer “how does this work?” based on real, recent changes. Reduce ramp‑up time without long knowledge dumps.
+- **Sales enablement with up‑to‑date product information**: Keep customer‑facing docs, release summaries, and collateral aligned with what actually shipped so sales can speak confidently and accurately.
+- **Automated release notes**: Trigger on `release: published` to generate human‑readable notes for changelogs and GitHub Releases.
+- **Monorepo per-package changelogs**: Run in a matrix to append entries only to packages that changed.
+- **Compliance and audit trails**: Preserve an append‑only ledger of changes with PR‑linked provenance and one‑click suggestions.
+
 ## ✨ Features
 
 - 🤖 **AI-Powered Analysis**: Uses Claude AI to understand commit patterns and generate meaningful changelog entries
@@ -17,15 +27,6 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 - 📊 **Multiple Triggers**: Works with pull requests, releases, and manual workflow dispatch
 - 🎯 **Flexible Configuration**: Supports custom changelog paths, target names, and versioning strategies
 
-## 📦 Common Use Cases
-
-- **Keep LLMs in sync with your codebase**: Maintain a canonical changelog that becomes the model's source of truth for context. Ideal for AI-assisted code review, agents, and RAG pipelines.
-- **Automated release notes**: Trigger on `release: published` to generate human‑readable notes for changelogs and GitHub Releases.
-- **Monorepo per-package changelogs**: Run in a matrix to append entries only to packages that changed.
-- **Compliance and audit trails**: Preserve an append‑only ledger of changes with PR‑linked provenance and one‑click suggestions.
-- **Docs-as-code workflows**: Ensure product and API docs stay aligned with actual shipped changes.
-- **Faster onboarding for new engineers and contractors (founder benefit)**: Give an LLM the precise, up‑to‑date context to answer “how does this work?” based on real, recent changes. Reduce ramp‑up time without long knowledge dumps.
-- **Sales enablement with up‑to‑date product information**: Keep customer‑facing docs, release summaries, and collateral aligned with what actually shipped so sales can speak confidently and accurately.
 
 ## 🚀 Quick Start
 
@@ -273,123 +274,20 @@ jobs:
 
 ## 📋 Advanced Examples
 
-### Multi-Project Monorepo
+To keep this README concise, advanced recipes live in the usage guide:
 
-```yaml
-name: Update Changelogs
+- Monorepo matrix examples
+- Release automation
+- Custom configuration (alternate changelog paths, base branches, etc.)
 
-on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+See: `USAGE.md`
 
-jobs:
-  update-changelogs:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    strategy:
-      matrix:
-        project:
-          - { name: "frontend", path: "packages/frontend/CHANGELOG.md" }
-          - { name: "backend", path: "packages/backend/CHANGELOG.md" }
-          - { name: "shared", path: "packages/shared/CHANGELOG.md" }
+## 🧠 How It Works (at a glance)
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
-      - name: Generate Changelog for ${{ matrix.project.name }}
-        uses: lukemun/context-ledger@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          changelog_path: ${{ matrix.project.path }}
-          target_name: ${{ matrix.project.name }}
-```
-
-### Release Automation
-
-```yaml
-name: Release Changelog
-
-on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      version_increment:
-        description: "Version increment type"
-        required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-
-jobs:
-  update-changelog:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate Release Changelog
-        uses: lukemun/context-ledger@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          version_increment: ${{ github.event.inputs.version_increment || 'auto' }}
-          auto_commit: true
-```
-
-### Custom Configuration
-
-```yaml
-- name: Generate Changelog with Custom Settings
-  uses: lukemun/context-ledger@v1
-  with:
-    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-    changelog_path: "docs/CHANGES.md"
-    target_name: "api-service"
-    commit_range: "20"
-    version_increment: "minor"
-    base_branch: "develop"
-    skip_if_no_changes: false
-    create_pr_suggestions: true
-```
-
-## 🧠 How It Works
-
-1. **Trigger Detection**: Runs on PR events, releases, or manual dispatch
-2. **Loop Prevention**: Checks for suggestion commits and changelog-only changes
-3. **Change Analysis**: Extracts PR commits, changed files, and git diffs
-4. **AI Processing**: Claude AI analyzes changes and generates categorized changelog entries
-5. **Version Management**: Automatically determines semantic version increments
-6. **GitHub Integration**: Creates suggestions for one-click application in PRs
-
-### Commit Analysis
-
-The action intelligently categorizes commits based on conventional commit patterns:
-
-- **feat:** → Added section, minor version increment
-- **fix:** → Fixed section, patch version increment
-- **docs:** → Changed section, patch version increment
-- **BREAKING:** → Major version increment
-- **chore/style/refactor/test:** → Technical Details section, patch increment
-
-### Version Strategy
-
-| Commit Types            | Version Increment     |
-| ----------------------- | --------------------- |
-| Breaking changes        | Major (1.0.0 → 2.0.0) |
-| New features (feat:)    | Minor (1.0.0 → 1.1.0) |
-| Bug fixes, docs, chores | Patch (1.0.0 → 1.0.1) |
+- Detects PRs/releases/manual runs
+- Gathers recent commits and changed files
+- Uses Claude to draft a clean, categorized entry
+- Suggests the change on your PR (one‑click apply) or commits on non‑PR events
 
 ## 🔧 Development
 
