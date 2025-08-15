@@ -113,13 +113,18 @@ runs:
           echo "should_skip=true" >> $GITHUB_OUTPUT
           echo "skip_reason=changelog_only_commit" >> $GITHUB_OUTPUT
         # Check if only changelog files were modified in the entire PR
-        elif echo "$CHANGED_FILES" | grep -v -E '(CHANGELOG\.md|.*CHANGELOG\.md)$' | grep -q '.'; then
-          echo "Non-changelog files were modified - proceeding with changelog automation"
-          echo "should_skip=false" >> $GITHUB_OUTPUT
         else
-          echo "🔄 Only changelog files were modified in entire PR - skipping"
-          echo "should_skip=true" >> $GITHUB_OUTPUT
-          echo "skip_reason=changelog_only_pr" >> $GITHUB_OUTPUT
+          # Filter out changelog files and check if anything remains
+          NON_CHANGELOG_FILES=$(echo "$CHANGED_FILES" | grep -v -E '(CHANGELOG\.md|.*CHANGELOG\.md)$' || true)
+          if [ -n "$NON_CHANGELOG_FILES" ]; then
+            echo "Non-changelog files were modified - proceeding with changelog automation"
+            echo "Non-changelog files: $NON_CHANGELOG_FILES"
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "🔄 Only changelog files were modified in entire PR - skipping"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=changelog_only_pr" >> $GITHUB_OUTPUT
+          fi
         fi
 
     - name: Skip notification
