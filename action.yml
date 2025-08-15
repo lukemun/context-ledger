@@ -211,8 +211,9 @@ runs:
         # Try to get latest version from CHANGELOG.md first
         LATEST_VERSION=""
         if [ -f "CHANGELOG.md" ]; then
-          # Look for version pattern like [0.3.0] or ## [0.3.0]
-          LATEST_VERSION=$(grep -E '^\#\# \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | head -1 | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || true)
+          # Look for the most recent version header by scanning from the bottom up
+          # Matches lines like: ## [0.3.0]
+          LATEST_VERSION=$(tac CHANGELOG.md | grep -m1 -E '^\#\# \[[0-9]+\.[0-9]+\.[0-9]+\]' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || true)
         fi
         
         # If no version in changelog, try git tags
