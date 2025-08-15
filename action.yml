@@ -591,7 +591,14 @@ runs:
           echo "status=$STATUS" >> $GITHUB_OUTPUT
           echo "changelog_updated=${{ steps.check-status.outputs.changelog_updated || 'false' }}" >> $GITHUB_OUTPUT
           echo "has_changes=${{ steps.check-status.outputs.has_changes || 'false' }}" >> $GITHUB_OUTPUT
-          echo "changelog_content=${{ steps.check-status.outputs.changelog_content || '' }}" >> $GITHUB_OUTPUT
+          # Handle multiline content properly
+          if [ -f "new_content.txt" ]; then
+            echo "changelog_content<<EOF" >> $GITHUB_OUTPUT
+            cat new_content.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "changelog_content=" >> $GITHUB_OUTPUT
+          fi
           echo "version_generated=${{ steps.check-status.outputs.version_generated || '' }}" >> $GITHUB_OUTPUT
         fi
 
