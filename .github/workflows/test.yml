@@ -1,4 +1,4 @@
-name: Test Claude Changelog Action
+name: Test Action
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 
 jobs:
   test-action:
+    name: Validate Action Structure
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,6 +59,7 @@ jobs:
           echo "✅ Script structure validation passed"
 
   lint-and-validate:
+    name: Lint and Syntax Check
     runs-on: ubuntu-latest
 
     steps:
@@ -104,6 +106,7 @@ jobs:
           echo "✅ JavaScript syntax is valid"
 
   integration-test:
+    name: Manual Integration Test
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     permissions:
