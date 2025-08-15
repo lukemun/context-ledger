@@ -29,9 +29,120 @@ A GitHub Action that maintains a source of truth for LLM context across your cod
 
 ## 🚀 Quick Start
 
-### Basic Usage
+### Complete Setup Guide
 
-Add this action to your `.github/workflows/changelog.yml`:
+Follow these steps to set up Context Ledger in your repository:
+
+#### Step 1: Create the Workflow File
+
+Create `.github/workflows/changelog.yml` in your repository:
+
+```yaml
+name: Update Changelog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "docs/**"
+      - "**/CHANGELOG.md"
+      - "CHANGELOG.md"
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      version_increment:
+        description: "Version increment type"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - "auto"
+          - "patch"
+          - "minor"
+          - "major"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Changelog with Context Ledger
+        uses: lukemun/context-ledger@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          changelog_path: "CHANGELOG.md"
+          target_name: "your-project-name"
+          version_increment: ${{ inputs.version_increment || 'auto' }}
+          auto_commit: ${{ github.event_name != 'pull_request' }}
+          create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
+```
+
+#### Step 2: Create Initial Changelog
+
+Create a `CHANGELOG.md` file in your repository root:
+
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<!-- Context Ledger will add new entries below this line -->
+<!-- AI_APPEND_HERE -->
+```
+
+#### Step 3: Get Anthropic API Key
+
+1. Sign up at [Anthropic Console](https://console.anthropic.com/)
+2. Create a new API key
+3. Copy the key (starts with `sk-ant-`)
+
+#### Step 4: Add API Key to Repository Secrets
+
+1. Go to your repository on GitHub
+2. Click **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Name: `ANTHROPIC_API_KEY`
+5. Value: Your API key from Step 3
+6. Click **Add secret**
+
+#### Step 5: Commit and Push
+
+```bash
+git add .github/workflows/changelog.yml CHANGELOG.md
+git commit -m "feat: add Context Ledger for automated changelog generation"
+git push origin main
+```
+
+#### Step 6: Test It!
+
+Create a new pull request and watch Context Ledger analyze your changes and suggest changelog entries!
+
+### ⚠️ Important Notes
+
+- **Workflow file must be on main branch**: The workflow file needs to exist on your main branch before it will run on PRs
+- **API key required**: Without `ANTHROPIC_API_KEY`, Context Ledger will post a helpful comment with setup instructions
+- **First run**: The action will run starting with your first PR after adding the workflow to main
+- **Permissions**: Make sure your repository allows Actions to write to PRs (enabled by default)
+
+### Basic Usage (Alternative)
 
 ```yaml
 name: Update Changelog
