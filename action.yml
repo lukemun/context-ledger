@@ -82,6 +82,8 @@ runs:
       id: check-suggestions
       shell: bash
       run: |
+        set +e  # Don't exit on error for this section
+        
         # Check if the most recent commit is from applying suggestions or only modifies changelog
         LATEST_COMMIT_MSG=$(git log -1 --pretty=format:"%s")
         echo "Latest commit message: $LATEST_COMMIT_MSG"
@@ -89,7 +91,10 @@ runs:
         # For PRs, check all files changed in the PR, not just the latest commit
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           echo "Checking all files changed in PR..."
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD | sort)
+          # Use git fetch to ensure we have the base ref
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1 || true
+          # Use diff-tree to handle both added and deleted files properly
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD 2>/dev/null | sort || git log --name-only --pretty=format: origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -v '^$' | sort | uniq)
         else
           # For non-PR events, check the latest commit
           CHANGED_FILES=$(git log -1 --name-only --pretty=format: | grep -v '^$' | sort)
