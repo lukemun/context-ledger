@@ -51,29 +51,3 @@ jobs:
           auto_commit: ${{ github.event_name != 'pull_request' }}
           create_pr_suggestions: ${{ github.event_name == 'pull_request' }}
         continue-on-error: true  # Allow PR to succeed even if API key is missing
-
-      - name: Add workflow source comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // Only comment once per PR
-            const comments = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            });
-            
-            const hasComment = comments.data.some(c => 
-              c.body.includes('🏷️ Workflow: Production Version')
-            );
-            
-            if (!hasComment) {
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: '🏷️ **Workflow: Production Version** - This changelog was generated using `lukemun/context-ledger@v1`'
-              });
-            }
