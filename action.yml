@@ -91,10 +91,15 @@ runs:
         # For PRs, check all files changed in the PR, not just the latest commit
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           echo "Checking all files changed in PR..."
-          # Use git fetch to ensure we have the base ref
-          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1 || true
-          # Use diff-tree to handle both added and deleted files properly
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD 2>/dev/null | sort || git log --name-only --pretty=format: origin/${{ github.event.pull_request.base.ref }}..HEAD | grep -v '^$' | sort | uniq)
+          # Fetch the base branch to ensure we have it
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=50
+          
+          # Get the merge base (common ancestor)
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
+          echo "Merge base: $MERGE_BASE"
+          
+          # Get files changed since the merge base
+          CHANGED_FILES=$(git diff --name-only $MERGE_BASE...HEAD | sort)
         else
           # For non-PR events, check the latest commit
           CHANGED_FILES=$(git log -1 --name-only --pretty=format: | grep -v '^$' | sort)
@@ -175,23 +180,29 @@ runs:
 
         # Get commits that are part of this PR or recent commits
         if [ "${{ github.event_name }}" == "pull_request" ]; then
-          # For PRs, only analyze commits between base and head
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          echo "Analyzing PR commits between base ($BASE_SHA) and head ($HEAD_SHA)..."
+          # For PRs, use merge-base to get accurate diff
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=50
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
+          echo "Using merge base: $MERGE_BASE"
+          echo "Analyzing PR commits from merge base to HEAD..."
 
           # Get commits that are in this PR
-          git log --pretty=format:"%h|%s|%an|%ad" --date=short ${BASE_SHA}..${HEAD_SHA} > recent_commits.txt
-          COMMIT_COUNT=$(git rev-list --count ${BASE_SHA}..${HEAD_SHA})
+          git log --pretty=format:"%h|%s|%an|%ad" --date=short ${MERGE_BASE}..HEAD > recent_commits.txt
+          COMMIT_COUNT=$(git rev-list --count ${MERGE_BASE}..HEAD)
 
-          # Get changed files for PR commits
-          git log --pretty=format:"%h" --name-only ${BASE_SHA}..${HEAD_SHA} > changed_files.txt
+          # Get changed files since merge base
+          git diff --name-only ${MERGE_BASE}...HEAD | sort -u > changed_files.txt
         else
           # For non-PR events, use the configured count
           COMMIT_COUNT="${{ inputs.commit_range }}"
           echo "Analyzing last $COMMIT_COUNT commits..."
           git log --pretty=format:"%h|%s|%an|%ad" --date=short -n $COMMIT_COUNT > recent_commits.txt
-          git log --pretty=format:"%h" --name-only -n $COMMIT_COUNT > changed_files.txt
+          git log --pretty=format:"%h" --name-only -n $COMMIT_COUNT | \
+            grep -v '^[a-f0-9]\{7\}$' | \
+            grep -v -E '\.(next|dist|build|node_modules|coverage|out)/' | \
+            grep -v -E '\.(log|tmp|cache|lock)$' | \
+            grep -v -E '^(\.next/|dist/|build/|node_modules/|coverage/|out/)' | \
+            sort -u > changed_files.txt
         fi
 
         # Get current branch and recent tags
