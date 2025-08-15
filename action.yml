@@ -71,8 +71,6 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: "20"
-        cache: "pnpm"
-        cache-dependency-path: ${{ github.action_path }}/package.json
 
     - name: Install action dependencies
       shell: bash
