@@ -61,3 +61,15 @@ Introduces improved changelog management with a dedicated marker system for auto
 ### Technical Details
 - Refactored changelog generation logic for better maintainability
 - Improved marker-based insertion system for more reliable updates
+
+
+## [1.1.1] - August 2025
+
+Improves the changelog comparison logic to ensure more accurate change detection by comparing against the working directory instead of HEAD, enhancing reliability of the changelog management process.
+
+### Fixed
+- Enhanced changelog comparison accuracy by using working directory state instead of HEAD reference
+
+### Technical Details
+- Updated internal comparison logic for more reliable changelog state detection
+<!-- Updated for AI processing at 2025-08-17T21:37:53.855Z -->
