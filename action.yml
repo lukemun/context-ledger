@@ -456,20 +456,14 @@ runs:
             git fetch origin "$BASE_BRANCH"
 
             echo "Comparing with origin/$BASE_BRANCH..."
-            # First, get the content from the base branch
-            BASE_CONTENT=$(git show "origin/$BASE_BRANCH:${{ inputs.changelog_path }}" 2>/dev/null || echo "")
-            # Then compare with the current working file
-            CURRENT_CONTENT=$(cat "${{ inputs.changelog_path }}" 2>/dev/null || echo "")
-            
-            if [ "$BASE_CONTENT" = "$CURRENT_CONTENT" ]; then
+            if git diff --quiet FETCH_HEAD -- "${{ inputs.changelog_path }}"; then
               echo "has_changes=false" >> $GITHUB_OUTPUT
               echo "DEBUG: No differences from base branch"
             else
               echo "has_changes=true" >> $GITHUB_OUTPUT
               echo "DEBUG: Changelog differs from base branch"
               echo "Diff preview:"
-              # Show the diff between base branch and working directory
-              git show "origin/$BASE_BRANCH:${{ inputs.changelog_path }}" | diff -u - "${{ inputs.changelog_path }}" || true
+              git diff FETCH_HEAD -- "${{ inputs.changelog_path }}"
             fi
           else
             # For non-PR events, check local changes
