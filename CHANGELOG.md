@@ -73,3 +73,18 @@ Improves the changelog comparison logic to ensure more accurate change detection
 ### Technical Details
 - Updated internal comparison logic for more reliable changelog state detection
 <!-- Updated for AI processing at 2025-08-17T21:37:53.855Z -->
+
+
+## [1.1.2] - August 2025
+
+Improves the changelog comparison functionality by implementing a more accurate git diff-based approach, ensuring more reliable change detection and version tracking.
+
+### Fixed
+- Enhanced changelog comparison accuracy using git diff for more precise change detection
+
+### Technical Details
+- Implemented git diff-based comparison logic for improved changelog state tracking
+- Added comprehensive test coverage for changelog comparison scenarios
+<!-- Updated for AI processing at 2025-08-19T14:08:56.727Z -->
+
+<!-- Updated for AI processing at 2025-08-19T14:08:57.564Z -->
