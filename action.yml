@@ -230,7 +230,7 @@ runs:
 
     - name: Ensure changelog is in PR diff
       if: github.event_name == 'pull_request' && steps.check-suggestions.outputs.should_skip != 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       env:
         CHANGELOG_PATH: ${{ inputs.changelog_path }}
       with:
@@ -367,7 +367,7 @@ runs:
 
     - name: Comment about missing API key
       if: steps.check-suggestions.outputs.should_skip != 'true' && steps.check-api-key.outputs.api_key_missing == 'true' && github.event_name == 'pull_request'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ inputs.github_token }}
         script: |
@@ -506,7 +506,7 @@ runs:
         github.event_name == 'pull_request' &&
         steps.check-status.outputs.has_changes == 'true' &&
         inputs.create_pr_suggestions == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       env:
         CHANGELOG_PATH: ${{ inputs.changelog_path }}
       with:
